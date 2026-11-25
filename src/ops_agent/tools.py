@@ -1,8 +1,9 @@
 """Catálogo de herramientas, política de aprobación y ejecutores (MCP remoto o local)."""
-import json
-from typing import Any, Protocol
+from copy import deepcopy
+from typing import Any
 
 from ops_agent.orders import OrderStore
+from ops_agent.runtime_contracts import ToolExecutor, to_tool_message
 
 # Esquemas en formato de function calling de OpenAI; deben coincidir con mcp_server.py.
 TOOL_SPECS: list[dict] = [
@@ -55,10 +56,6 @@ ALLOWED_TOOLS = {spec["function"]["name"] for spec in TOOL_SPECS}
 NEEDS_APPROVAL = {"request_refund"}
 
 
-class ToolExecutor(Protocol):
-    async def call(self, name: str, args: dict[str, Any]) -> dict: ...
-
-
 class LocalToolExecutor:
     """Ejecuta contra OrderStore en memoria: útil para tests y demos sin servidor."""
 
@@ -78,12 +75,13 @@ class LocalToolExecutor:
 class McpToolExecutor:
     """Llama a las herramientas en un servidor MCP remoto (Streamable HTTP).
 
-    Las descripciones que ve el modelo salen de TOOL_SPECS (locales y revisadas), nunca del servidor:
+    Las descripciones que ve el modelo salen del manifiesto local del agente, nunca del servidor:
     un servidor comprometido no puede inyectar instrucciones vía descripciones de herramientas.
     """
 
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, tool_specs: tuple[dict, ...] | None = None) -> None:
         self.url = url
+        self.tool_specs = deepcopy(tuple(tool_specs) if tool_specs is not None else tuple(TOOL_SPECS))
         self._verified = False
 
     async def call(self, name: str, args: dict[str, Any]) -> dict:
@@ -94,7 +92,7 @@ class McpToolExecutor:
         async with Client(self.url) as client:
             if not self._verified:
                 listed = await client.list_tools()
-                problems = check_server_tools({t.name: t.input_schema for t in listed.tools})
+                problems = check_server_tools({t.name: t.input_schema for t in listed.tools}, self.tool_specs)
                 if problems:
                     raise RuntimeError("servidor MCP no confiable: " + "; ".join(problems))
                 self._verified = True
@@ -102,7 +100,3 @@ class McpToolExecutor:
             if result.is_error:
                 return {"ok": False, "error": "la herramienta devolvió un error"}
             return result.structured_content or {"ok": False, "error": "respuesta sin contenido estructurado"}
-
-
-def to_tool_message(call_id: str, result: dict) -> dict:
-    return {"role": "tool", "tool_call_id": call_id, "content": json.dumps(result, ensure_ascii=False)}

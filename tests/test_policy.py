@@ -8,27 +8,27 @@ VALID_REFUND = {"order_id": "A-1001", "amount": 20, "reason": "dañado"}
 
 
 def test_valid_args_pass():
-    assert validate_args("request_refund", VALID_REFUND) is None
-    assert validate_args("get_order", {"order_id": "A-1001"}) is None
+    assert validate_args("request_refund", VALID_REFUND, TOOL_SPECS) is None
+    assert validate_args("get_order", {"order_id": "A-1001"}, TOOL_SPECS) is None
 
 
 def test_unknown_tool_is_blocked():
-    assert validate_args("delete_database", {}) == "herramienta no permitida"
+    assert validate_args("delete_database", {}, TOOL_SPECS) == "herramienta no permitida"
 
 
 def test_undeclared_parameter_is_blocked():
-    problem = validate_args("request_refund", {**VALID_REFUND, "approved": True})
+    problem = validate_args("request_refund", {**VALID_REFUND, "approved": True}, TOOL_SPECS)
     assert problem and "no declarados" in problem
 
 
 def test_missing_and_wrong_types_are_blocked():
-    assert "faltan" in validate_args("request_refund", {"order_id": "A-1001"})
-    assert "amount" in validate_args("request_refund", {**VALID_REFUND, "amount": "9999"})
-    assert "amount" in validate_args("request_refund", {**VALID_REFUND, "amount": True})
+    assert "faltan" in validate_args("request_refund", {"order_id": "A-1001"}, TOOL_SPECS)
+    assert "amount" in validate_args("request_refund", {**VALID_REFUND, "amount": "9999"}, TOOL_SPECS)
+    assert "amount" in validate_args("request_refund", {**VALID_REFUND, "amount": True}, TOOL_SPECS)
 
 
 def test_oversized_strings_are_blocked():
-    assert "supera" in validate_args("request_refund", {**VALID_REFUND, "reason": "x" * 1000})
+    assert "supera" in validate_args("request_refund", {**VALID_REFUND, "reason": "x" * 1000}, TOOL_SPECS)
 
 
 def _served(specs=TOOL_SPECS):
@@ -36,14 +36,14 @@ def _served(specs=TOOL_SPECS):
 
 
 def test_server_matching_specs_is_trusted():
-    assert check_server_tools(_served()) == []
+    assert check_server_tools(_served(), TOOL_SPECS) == []
 
 
 def test_server_with_extra_or_changed_tools_is_not_trusted():
     served = _served()
     served["exec_shell"] = {"required": ["cmd"]}
     served["request_refund"] = {"required": ["order_id"]}
-    problems = check_server_tools(served)
+    problems = check_server_tools(served, TOOL_SPECS)
     assert any("exec_shell" in p for p in problems)
     assert any("request_refund" in p for p in problems)
 

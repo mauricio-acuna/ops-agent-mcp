@@ -28,10 +28,17 @@ def test_business_rules_are_framework_free():
 
 
 def test_graph_does_not_call_providers_directly():
-    forbidden = {"openai", "mcp"} & imported_modules("graph.py")
+    forbidden = {"openai", "mcp", "orders"} & imported_modules("graph.py")
     assert not forbidden, (
-        f"graph.py importa {forbidden}: usá las interfaces Planner y ToolExecutor para mantener tests deterministas"
+        f"graph.py importa {forbidden}: el runtime no debe depender del proveedor, transporte ni dominio de pedidos"
     )
+
+
+def test_runtime_contracts_and_agent_definition_are_domain_independent():
+    forbidden_modules = {"openai", "langgraph", "mcp", "orders", "tools"}
+    for module in ("agent_definition.py", "runtime_contracts.py"):
+        forbidden = forbidden_modules & imported_modules(module)
+        assert not forbidden, f"{module} importa {forbidden}: los contratos del runtime deben ser independientes"
 
 
 def test_actions_with_side_effects_need_approval():

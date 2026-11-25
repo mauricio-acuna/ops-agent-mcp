@@ -9,6 +9,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 from ops_agent import telemetry  # noqa: E402
 from ops_agent.graph import build_graph  # noqa: E402
+from ops_agent.order_agent import ORDER_AGENT  # noqa: E402
 from ops_agent.planner import Final, ScriptedPlanner, ToolCall  # noqa: E402
 from ops_agent.tools import LocalToolExecutor  # noqa: E402
 
@@ -24,7 +25,7 @@ def spans():
 def test_tool_execution_span_follows_genai_conventions(spans):
     tracer, exporter = spans
     planner = ScriptedPlanner([ToolCall("call_1", "get_order", {"order_id": "A-1001"}), Final("ok")])
-    graph = build_graph(planner, LocalToolExecutor(), tracer=tracer)
+    graph = build_graph(planner, LocalToolExecutor(), ORDER_AGENT, tracer=tracer)
 
     with telemetry.invoke_agent(tracer):
         asyncio.run(graph.ainvoke({"messages": [{"role": "user", "content": "hola"}], "steps": 0},
@@ -42,7 +43,7 @@ def test_tool_execution_span_follows_genai_conventions(spans):
 def test_tool_error_is_flagged_on_span(spans):
     tracer, exporter = spans
     planner = ScriptedPlanner([ToolCall("c1", "get_order", {"order_id": "NO-EXISTE"}), Final("ok")])
-    graph = build_graph(planner, LocalToolExecutor(), tracer=tracer)
+    graph = build_graph(planner, LocalToolExecutor(), ORDER_AGENT, tracer=tracer)
 
     asyncio.run(graph.ainvoke({"messages": [{"role": "user", "content": "hola"}], "steps": 0},
                               {"configurable": {"thread_id": "t"}}))

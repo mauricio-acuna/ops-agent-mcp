@@ -8,11 +8,10 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
 from ops_agent import telemetry
+from ops_agent.agent_definition import AgentDefinition
 from ops_agent.planner import Final, Planner, ToolCall
 from ops_agent.security import AuditLog, validate_args
-from ops_agent.tools import NEEDS_APPROVAL, ToolExecutor, to_tool_message
-
-MAX_STEPS = 6
+from ops_agent.runtime_contracts import ToolExecutor, to_tool_message
 
 
 class AgentState(TypedDict, total=False):
@@ -23,12 +22,12 @@ class AgentState(TypedDict, total=False):
     final: str
 
 
-def build_graph(planner: Planner, executor: ToolExecutor, checkpointer=None,
+def build_graph(planner: Planner, executor: ToolExecutor, definition: AgentDefinition, checkpointer=None,
                 audit: AuditLog | None = None, tracer=None):
     audit = audit if audit is not None else AuditLog()
 
     def plan(state: AgentState) -> dict[str, Any]:
-        if state.get("steps", 0) >= MAX_STEPS:
+        if state.get("steps", 0) >= definition.max_steps:
             return {"final": "No pude completar la tarea dentro del límite de pasos.", "pending": None}
         action = planner.next_action(state["messages"])
         if isinstance(action, Final):
@@ -45,7 +44,7 @@ def build_graph(planner: Planner, executor: ToolExecutor, checkpointer=None,
         }
         return {"messages": [assistant_msg], "pending": {
             "id": action.id, "name": action.name, "args": action.args,
-            "problem": validate_args(action.name, action.args),
+            "problem": validate_args(action.name, action.args, definition.tool_specs),
         }}
 
     def route_after_plan(state: AgentState) -> str:
@@ -54,7 +53,7 @@ def build_graph(planner: Planner, executor: ToolExecutor, checkpointer=None,
             return END
         if pending.get("problem"):
             return "reject"
-        return "approval" if pending["name"] in NEEDS_APPROVAL else "execute"
+        return "approval" if pending["name"] in definition.approval_tools else "execute"
 
     def approval(state: AgentState) -> dict[str, Any]:
         pending = state["pending"]

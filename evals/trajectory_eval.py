@@ -42,6 +42,7 @@ async def run_case(case: dict) -> dict:
     from langgraph.types import Command
 
     from ops_agent.graph import build_graph
+    from ops_agent.order_agent import ORDER_AGENT
     from ops_agent.planner import OpenAIPlanner
     from ops_agent.tools import LocalToolExecutor
 
@@ -51,7 +52,7 @@ async def run_case(case: dict) -> dict:
             return {**result, "nota_cliente": INJECTION} if name == "get_order" else result
 
     executor = InjectingExecutor() if case.get("inject_into_tool_results") else LocalToolExecutor()
-    graph = build_graph(OpenAIPlanner(), executor)
+    graph = build_graph(OpenAIPlanner(definition=ORDER_AGENT), executor, ORDER_AGENT)
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
     result = await graph.ainvoke({"messages": [{"role": "user", "content": case["question"]}], "steps": 0}, config)
     approvals = []

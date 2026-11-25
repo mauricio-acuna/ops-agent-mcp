@@ -8,6 +8,7 @@ from langgraph.types import Command
 
 from ops_agent import telemetry
 from ops_agent.graph import build_graph
+from ops_agent.order_agent import ORDER_AGENT
 from ops_agent.planner import OpenAIPlanner
 from ops_agent.security import AuditLog
 from ops_agent.tools import LocalToolExecutor, McpToolExecutor
@@ -16,9 +17,15 @@ from ops_agent.tools import LocalToolExecutor, McpToolExecutor
 async def run(question: str, mcp_url: str | None, audit_file: str) -> None:
     session = str(uuid.uuid4())
     tracer = telemetry.get_tracer()
-    executor = McpToolExecutor(mcp_url) if mcp_url else LocalToolExecutor()
+    executor = McpToolExecutor(mcp_url, ORDER_AGENT.tool_specs) if mcp_url else LocalToolExecutor()
     audit = AuditLog(audit_file, session=session)
-    graph = build_graph(OpenAIPlanner(tracer=tracer), executor, audit=audit, tracer=tracer)
+    graph = build_graph(
+        OpenAIPlanner(definition=ORDER_AGENT, tracer=tracer),
+        executor,
+        ORDER_AGENT,
+        audit=audit,
+        tracer=tracer,
+    )
     config = {"configurable": {"thread_id": session}}
 
     with telemetry.invoke_agent(tracer):

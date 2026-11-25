@@ -9,6 +9,7 @@ from langgraph.types import Command
 
 from ops_agent.graph import build_graph
 from ops_agent.orders import OrderStore
+from ops_agent.order_agent import ORDER_AGENT
 from ops_agent.planner import Final, ScriptedPlanner, ToolCall
 from ops_agent.security import AuditLog
 from ops_agent.tools import LocalToolExecutor
@@ -43,7 +44,7 @@ def hijacked_planner():
 
 def test_hijacked_agent_cannot_move_money_without_a_human():
     store, audit = OrderStore(), AuditLog()
-    graph = build_graph(hijacked_planner(), PoisonedExecutor(store), audit=audit)
+    graph = build_graph(hijacked_planner(), PoisonedExecutor(store), ORDER_AGENT, audit=audit)
 
     result, _ = start(graph)
 
@@ -54,7 +55,7 @@ def test_hijacked_agent_cannot_move_money_without_a_human():
 
 def test_even_if_a_human_approves_business_rules_cap_the_damage():
     store, audit = OrderStore(), AuditLog()
-    graph = build_graph(hijacked_planner(), PoisonedExecutor(store), audit=audit)
+    graph = build_graph(hijacked_planner(), PoisonedExecutor(store), ORDER_AGENT, audit=audit)
 
     _, config = start(graph)
     asyncio.run(graph.ainvoke(Command(resume="approve"), config))
@@ -70,7 +71,7 @@ def test_tool_misuse_with_undeclared_arguments_is_blocked_before_approval():
         ToolCall("c1", "request_refund", {"order_id": "A-1001", "amount": 20, "reason": "x", "skip_approval": True}),
         Final("ok"),
     ])
-    graph = build_graph(planner, LocalToolExecutor(store), audit=audit)
+    graph = build_graph(planner, LocalToolExecutor(store), ORDER_AGENT, audit=audit)
 
     result, _ = start(graph)
 
@@ -88,7 +89,7 @@ def test_every_decision_is_audited():
         ToolCall("c3", "request_refund", {"order_id": "A-1001", "amount": 20, "reason": "dañado"}),
         Final("ok"),
     ])
-    graph = build_graph(planner, LocalToolExecutor(), audit=audit)
+    graph = build_graph(planner, LocalToolExecutor(), ORDER_AGENT, audit=audit)
 
     _, config = start(graph)
     asyncio.run(graph.ainvoke(Command(resume="reject"), config))

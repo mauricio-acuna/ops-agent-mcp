@@ -7,18 +7,18 @@
 import json
 import time
 from pathlib import Path
-from typing import Any
-
-from ops_agent.tools import TOOL_SPECS
+from typing import Any, Sequence
 
 _JSON_TYPES: dict[str, tuple[type, ...]] = {"string": (str,), "number": (int, float), "integer": (int,), "boolean": (bool,)}
-_SCHEMAS = {spec["function"]["name"]: spec["function"]["parameters"] for spec in TOOL_SPECS}
 MAX_ARG_CHARS = 200
 
 
-def validate_args(tool: str, args: Any) -> str | None:
+def validate_args(tool: str, args: Any, tool_specs: Sequence[dict]) -> str | None:
     """Devuelve un motivo de rechazo o None si los argumentos cumplen el esquema declarado."""
-    schema = _SCHEMAS.get(tool)
+    schemas = {
+        spec["function"]["name"]: spec["function"]["parameters"] for spec in tool_specs
+    }
+    schema = schemas.get(tool)
     if schema is None:
         return "herramienta no permitida"
     if not isinstance(args, dict):
@@ -40,12 +40,13 @@ def validate_args(tool: str, args: Any) -> str | None:
     return None
 
 
-def check_server_tools(served: dict[str, dict]) -> list[str]:
-    """Compara las herramientas del servidor (nombre -> input_schema) con TOOL_SPECS."""
+def check_server_tools(served: dict[str, dict], tool_specs: Sequence[dict]) -> list[str]:
+    """Compara herramientas servidas con el manifiesto local del agente."""
+    schemas = {spec["function"]["name"]: spec["function"]["parameters"] for spec in tool_specs}
     problems = []
-    for name in sorted(set(served) - set(_SCHEMAS)):
+    for name in sorted(set(served) - set(schemas)):
         problems.append(f"el servidor expone una herramienta no esperada: {name}")
-    for name, schema in _SCHEMAS.items():
+    for name, schema in schemas.items():
         if name not in served:
             problems.append(f"falta la herramienta {name} en el servidor")
             continue

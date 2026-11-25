@@ -32,10 +32,11 @@ execute → ToolExecutor ─┬─ LocalToolExecutor (tests/demo)
 | `interrupt()` + checkpointer | Human-in-the-loop real: el grafo se pausa y se reanuda con `Command(resume=...)` |
 | `ALLOWED_TOOLS` y `NEEDS_APPROVAL` en código | Mitiga *Excessive Agency* (OWASP LLM06) |
 | Reglas de reembolso en `OrderStore` | El modelo no puede reembolsar más que el total ni pedidos no entregados |
-| `MAX_STEPS = 6` | Evita bucles y costos sin límite (OWASP LLM10) |
+| Límite `max_steps` por definición | Limita bucles y coste; el agente de pedidos comienza con 6 pasos (OWASP LLM10) |
+| `AgentDefinition` | Configura por agente el prompt, las herramientas permitidas, las aprobaciones y el límite de pasos |
 | Interfaz `Planner` + `ScriptedPlanner` | Tests deterministas sin LLM ni red |
 | Validación de argumentos contra el esquema antes de aprobar | El modelo no puede inventar parámetros como `skip_approval` (OWASP Agentic ASI02) |
-| El modelo solo ve `TOOL_SPECS` locales; el servidor MCP se verifica al conectar | Un servidor comprometido no inyecta instrucciones por descripciones (ASI04) |
+| El modelo y el ejecutor MCP usan el manifiesto local del agente | Un servidor remoto no puede ampliar herramientas ni inyectar instrucciones por descripciones (ASI04) |
 | `AuditLog` append-only (JSONL) | Quién pidió qué, qué aprobó un humano y qué se ejecutó (ASI09, ASI10) |
 | Spans OpenTelemetry `gen_ai.*` | Trazas portables entre backends, sin prompts ni respuestas |
 
@@ -55,10 +56,10 @@ El workflow `evals.yml` lo corre en PRs que tocan `src/` o `evals/`, semanalment
 
 ## Verificación local reproducible
 
-Estado comprobado el 25/11/2026 con Python 3.13.14:
+Estado comprobado el 26/11/2026 con Python 3.13.14:
 
 ```text
-33 tests passed
+47 tests passed
 ```
 
 Entorno limpio:
@@ -71,6 +72,38 @@ python -m venv .venv-local
 
 La tabla de evals con modelo real permanece pendiente hasta disponer de `OPENAI_API_KEY`; no se ha sustituido por resultados simulados.
 
+## Definición de agente reutilizable
+
+`AgentDefinition` permite configurar el agente sin copiar ni modificar el grafo: asigna identidad y versión, prompt, catálogo de herramientas, herramientas que requieren aprobación y máximo de pasos. La misma definición debe pasarse al planner y al grafo, de modo que el modelo solo reciba herramientas que el runtime acepta.
+
+Ejemplo para construir un perfil de solo lectura a partir del catálogo de pedidos:
+
+```python
+from ops_agent.agent_definition import AgentDefinition
+from ops_agent.order_agent import ORDER_AGENT
+from ops_agent.graph import build_graph
+from ops_agent.planner import OpenAIPlanner
+from ops_agent.tools import LocalToolExecutor
+
+read_only = AgentDefinition(
+    agent_id="read-only-orders",
+    version="1",
+    system_prompt="Responde consultas de pedidos. No realices cambios.",
+    tool_specs=tuple(
+        spec for spec in ORDER_AGENT.tool_specs
+        if spec["function"]["name"] == "get_order"
+    ),
+    max_steps=3,
+)
+
+planner = OpenAIPlanner(definition=read_only)
+graph = build_graph(planner, LocalToolExecutor(), definition=read_only)
+```
+
+El catálogo de herramientas del runtime es la allowlist efectiva: una llamada a una herramienta que no aparezca en la definición se rechaza antes del ejecutor. Las herramientas con efectos requieren figurar en `approval_tools`; la definición valida que no se solicite aprobación para una herramienta inexistente. Esto es una primera extracción configurable, no una política multiusuario completa ni persistencia durable.
+
+Al usar MCP, pasar el mismo manifiesto al ejecutor para que verifique el servidor frente al perfil del agente: `McpToolExecutor(url, read_only.tool_specs)`.
+
 ## Observabilidad
 Con `pip install -e ".[otel]"` y un SDK de OpenTelemetry configurado, el agente emite spans `invoke_agent ops-agent`, `chat {modelo}` (con tokens) y `execute_tool {herramienta}` según las [convenciones GenAI](https://github.com/open-telemetry/semantic-conventions-genai). Sin el SDK, la telemetría es no-op.
 
@@ -78,7 +111,7 @@ Con `pip install -e ".[otel]"` y un SDK de OpenTelemetry configurado, el agente 
 ```bash
 uv sync --extra dev                         # o: pip install -e ".[dev]"
 cp .env.example .env
-uv run pytest                               # 33 tests, sin API key
+uv run pytest                               # 47 tests, sin API key
 
 # Opción A: herramientas locales
 uv run ops-agent "Quiero un reembolso de 20 dólares del pedido A-1001, llegó dañado"
@@ -92,7 +125,7 @@ uv run mcp dev src/ops_agent/mcp_server.py
 ```
 
 ## Dos harnesses en un proyecto
-- **Harness del agente que construís**: todo lo que rodea al modelo (*Agent = Model + Harness*): lista blanca de herramientas, `interrupt()` para aprobación, `MAX_STEPS`, reglas en `OrderStore`.
+- **Harness del agente que construís**: todo lo que rodea al modelo (*Agent = Model + Harness*): lista blanca de herramientas por `AgentDefinition`, `interrupt()` para aprobación, `max_steps`, reglas en `OrderStore`.
 - **Harness para agentes de código que trabajan en el repo**: [AGENTS.md](AGENTS.md) como mapa y `tests/test_architecture.py` como sensor (capas, política de aprobación, servidor MCP sincronizado con `TOOL_SPECS`).
 
 ## Próximos pasos
