@@ -30,7 +30,7 @@ execute → ToolExecutor ─┬─ LocalToolExecutor (tests/demo)
 |---|---|
 | Workflow explícito en LangGraph | Control y testabilidad; cada transición es visible |
 | `interrupt()` + checkpointer | Human-in-the-loop real: el grafo se pausa y se reanuda con `Command(resume=...)` |
-| `ALLOWED_TOOLS` y `NEEDS_APPROVAL` en código | Mitiga *Excessive Agency* (OWASP LLM06) |
+| Manifiesto y aprobaciones en `AgentDefinition` | El modelo y el runtime comparten una allowlist por agente; `request_refund` requiere revisión humana |
 | Reglas de reembolso en `OrderStore` | El modelo no puede reembolsar más que el total ni pedidos no entregados |
 | Límite `max_steps` por definición | Limita bucles y coste; el agente de pedidos comienza con 6 pasos (OWASP LLM10) |
 | `AgentDefinition` | Configura por agente el prompt, las herramientas permitidas, las aprobaciones y el límite de pasos |
@@ -71,6 +71,12 @@ python -m venv .venv-local
 ```
 
 La tabla de evals con modelo real permanece pendiente hasta disponer de `OPENAI_API_KEY`; no se ha sustituido por resultados simulados.
+
+## Documentación para aprendizaje
+
+Este repositorio también es material de referencia para una guía académica. La [guía de aprendizaje](docs/learning-guide.md) explica los conceptos desde sus fundamentos, recorre el código y las pruebas, incluye limitaciones actuales y propone laboratorios. Está organizada para que el estudiante distinga una propuesta del modelo de una decisión autorizada del runtime.
+
+Al cambiar comportamiento o garantías, actualiza en el mismo cambio la guía, el README y las pruebas relacionadas. Lo implementado, lo parcial y lo pendiente deben quedar claramente separados; una propuesta futura no se describe como capacidad disponible.
 
 ## Definición de agente reutilizable
 

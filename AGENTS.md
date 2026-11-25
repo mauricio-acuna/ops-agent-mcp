@@ -4,6 +4,7 @@ Mapa para agentes de código (Copilot, Codex, Claude Code…). Es corto a propó
 
 ## Qué es
 Agente LangGraph que consulta pedidos y gestiona reembolsos vía MCP, con aprobación humana. Detalle en [README.md](README.md).
+La [guía de aprendizaje](docs/learning-guide.md) es documentación mantenida del proyecto: enlaza conceptos con código, pruebas y límites actuales.
 
 ## Comandos
 | Para | Comando |
@@ -46,6 +47,7 @@ Agente LangGraph que consulta pedidos y gestiona reembolsos vía MCP, con aproba
 1. `pytest -q` en verde, sin desactivar ni borrar tests.
 2. Herramienta nueva: agregala en `mcp_server.py`, `TOOL_SPECS` y en la definición del agente que la consume; si tiene efectos, requiere aprobación.
 3. Los tests usan `ScriptedPlanner` y `LocalToolExecutor`: sin red ni API key.
+4. Si el cambio afecta comportamiento, conceptos o garantías descritas, actualizá el README y la guía de aprendizaje en el mismo cambio; distingue capacidades implementadas de propuestas.
 
 ## Límites
 - Nunca quitar una herramienta con efectos de `approval_tools` ni ampliar `max_steps` sin justificarlo en el PR.
