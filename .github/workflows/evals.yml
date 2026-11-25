@@ -1,0 +1,33 @@
+name: evals
+# Gate de calidad con el modelo real. Corre en PRs que tocan el agente, semanalmente (deriva del modelo)
+# y a mano. Sin el secret OPENAI_API_KEY (ej. PRs desde forks) se omite sin fallar.
+on:
+  pull_request:
+    paths: ['src/**', 'evals/**']
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  trajectory:
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - if: env.OPENAI_API_KEY != ''
+        run: pip install -e .
+      - if: env.OPENAI_API_KEY != ''
+        run: python evals/trajectory_eval.py --min-pass 0.8 --out evals/results.json
+      - if: always() && env.OPENAI_API_KEY != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: trajectory-eval-results
+          path: evals/results.json
+      - if: env.OPENAI_API_KEY == ''
+        run: echo "OPENAI_API_KEY no configurado; evals omitidas."
